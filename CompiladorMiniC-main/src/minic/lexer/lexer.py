@@ -1,6 +1,7 @@
 """Analizador léxico de Mini C.
 
-Implementación según la especificación de la skill analizador-lexico-mini-c y el capítulo IV, §4.4.
+Se implementa en el **proyecto 1**. Convierte el texto fuente en una lista
+de tokens y diagnósticos siguiendo la especificación de la etapa léxica.
 """
 
 from minic.diagnostics import diagnostic_code
@@ -55,8 +56,16 @@ class Lexer:
             self._start_column = self._column
             self._scan_token()
 
-        self._tokens.append(Token(TokenType.EOF, "", None, self._line, self._column))
-        return LexerResult(list(self._tokens), self._diagnostics.to_list())
+        self._tokens.append(
+            Token(
+                type=TokenType.EOF,
+                lexeme="",
+                literal=None,
+                line=self._line,
+                column=self._column,
+            )
+        )
+        return LexerResult(self._tokens, self._diagnostics.to_list())
 
     def _is_at_end(self) -> bool:
         """Indica si ya se consumió todo el texto fuente."""
@@ -100,7 +109,6 @@ class Lexer:
         5. Cualquier otro carácter: ``_report_unrecognized``.
         """
         char = self._peek()
-
         if char in WHITESPACE:
             self._advance()
             return
@@ -127,8 +135,8 @@ class Lexer:
         while is_identifier_part(self._peek()):
             self._advance()
 
-        text = self._source[self._start : self._current]
-        token_type = KEYWORDS.get(text, TokenType.IDENTIFIER)
+        lexeme = self._source[self._start : self._current]
+        token_type = KEYWORDS.get(lexeme, TokenType.IDENTIFIER)
         self._add_token(token_type)
 
     def _scan_number(self) -> None:
@@ -140,8 +148,7 @@ class Lexer:
             self._advance()
 
         lexeme = self._source[self._start : self._current]
-        literal = int(lexeme)
-        self._add_token(TokenType.INTEGER_LITERAL, literal)
+        self._add_token(TokenType.INTEGER_LITERAL, literal=int(lexeme))
 
     def _scan_operator(self) -> bool:
         """Intenta reconocer un operador o símbolo en la posición actual.
@@ -150,18 +157,17 @@ class Lexer:
         reconoce algo, lo consume, emite el token y devuelve ``True``; si no,
         devuelve ``False`` sin consumir nada.
         """
-        if self._current + 1 < len(self._source):
-            two_chars = self._source[self._current : self._current + 2]
-            if two_chars in DOUBLE:
-                self._advance()
-                self._advance()
-                self._add_token(DOUBLE[two_chars])
-                return True
-
-        char = self._peek()
-        if char in SINGLE:
+        two_chars = self._source[self._current : self._current + 2]
+        if two_chars in DOUBLE:
             self._advance()
-            self._add_token(SINGLE[char])
+            self._advance()
+            self._add_token(DOUBLE[two_chars])
+            return True
+
+        one_char = self._peek()
+        if one_char in SINGLE:
+            self._advance()
+            self._add_token(SINGLE[one_char])
             return True
 
         return False
@@ -173,7 +179,13 @@ class Lexer:
         """
         lexeme = self._source[self._start : self._current]
         self._tokens.append(
-            Token(token_type, lexeme, literal, self._start_line, self._start_column)
+            Token(
+                type=token_type,
+                lexeme=lexeme,
+                literal=literal,
+                line=self._start_line,
+                column=self._start_column,
+            )
         )
 
     def _report_unrecognized(self) -> None:
@@ -182,12 +194,11 @@ class Lexer:
         Mensaje: ``Carácter no reconocido: '<c>'`` en la línea y la columna del
         carácter (``diagnostic_code.unrecognized_character``).
         """
-        err_line = self._start_line
-        err_column = self._start_column
         char = self._advance()
+        message = diagnostic_code.unrecognized_character(char)
         self._diagnostics.report(
             diagnostic_code.LEX001,
-            diagnostic_code.unrecognized_character(char),
-            err_line,
-            err_column,
+            message,
+            self._start_line,
+            self._start_column,
         )
